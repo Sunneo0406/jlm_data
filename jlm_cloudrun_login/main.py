@@ -144,6 +144,16 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     return user_id
 
 # Pydantic Models (省略，與您原有的程式碼相同)
+# 請將此段程式碼新增到 main.py 的 Pydantic Models 區塊
+class SensorData(BaseModel):
+    table_name: str
+    voltage: float
+    current: float
+    frequency: float
+    pf: float
+    watt: float
+    total_watt_hours: float
+
 class UserCreate(BaseModel):
     employee_name: str
     account: str
@@ -344,29 +354,28 @@ def redirect_to_login():
 def get_total_watt_hours_difference(start_time, end_time, table_name):
     """
     計算指定時間區間內 'total_watt_hours' 的差值。
+    此版本接收帶有時區的 datetime 物件，並將其格式化為字串進行查詢。
     """
-    print(f"開始時間:{start_time},結束時間:{end_time}")
     conn = None
     cursor = None
     try:
         conn = get_db_connection_from_pool()
         cursor = conn.cursor(dictionary=True)
         
-        # 確保 start_time 和 end_time 轉換為 UTC 並移除時區資訊
-        # 這樣可以讓資料庫正確比對時間
-      #  if start_time.tzinfo is not None:
-       #     start_time = start_time.astimezone(timezone.utc).replace(tzinfo=None)
-        #if end_time.tzinfo is not None:
-         #   end_time = end_time.astimezone(timezone.utc).replace(tzinfo=None)
+        # --- 修正處：將傳入的 datetime 物件格式化為查詢字串 ---
+        # 這樣可以確保傳遞給資料庫的格式永遠是正確的
+        start_time_str = start_time.strftime('%Y-%m-%d %H:%M:%S')
+        end_time_str = end_time.strftime('%Y-%m-%d %H:%M:%S')
+        # --- 修正結束 ---
 
         # 取得開始時間區間的第一筆 'total_watt_hours'
         query_start = f"SELECT total_watt_hours FROM `{table_name}` WHERE timestamp >= %s ORDER BY timestamp ASC LIMIT 1"
-        cursor.execute(query_start, (start_time,))
+        cursor.execute(query_start, (start_time_str,))
         start_watt_hours = cursor.fetchone()
 
         # 取得結束時間區間的最後一筆 'total_watt_hours'
         query_end = f"SELECT total_watt_hours FROM `{table_name}` WHERE timestamp <= %s ORDER BY timestamp DESC LIMIT 1"
-        cursor.execute(query_end, (end_time,))
+        cursor.execute(query_end, (end_time_str,))
         end_watt_hours = cursor.fetchone()
         
         if start_watt_hours and end_watt_hours:
@@ -381,14 +390,6 @@ def get_total_watt_hours_difference(start_time, end_time, table_name):
             cursor.close()
         if conn and conn.is_connected():
             conn.close()
-class SensorData(BaseModel):
-    table_name: str
-    voltage: float
-    current: float
-    frequency: float
-    pf: float
-    watt: float
-    total_watt_hours: float
 
 # 新增 API 路由
 @app.post("/api/upload_data")
@@ -489,7 +490,7 @@ def get_total_daily_kwh(user_id: int = Depends(get_current_user)):
             return {"total_kwh": 0}
             
         # 將台灣時間的 8:00 轉換為 UTC，並移除時區資訊，以匹配資料庫的時間戳記
-        start_time_today_utc = start_time_today_taipei.astimezone(pytz.utc).replace(tzinfo=None)
+        start_time_str = start_time_today_taipei.strftime('%Y-%m-%d %H:%M:%S')
             
         conn = get_db_connection_from_pool()
         cursor = conn.cursor(dictionary=True)
@@ -497,7 +498,7 @@ def get_total_daily_kwh(user_id: int = Depends(get_current_user)):
         for table_name in VALID_TABLES:
             # 查詢 08:00:00 後的第一筆數據 (當日開工數據)
             query_start = f"SELECT total_watt_hours FROM `{table_name}` WHERE timestamp >= %s ORDER BY timestamp ASC LIMIT 1"
-            cursor.execute(query_start, (start_time_today_utc,))
+            cursor.execute(query_start, (start_time_str,))
             result_start = cursor.fetchone()
             
             # 查詢最新一筆數據 (當前數據)
@@ -561,75 +562,88 @@ def get_total_latest_kwh(user_id: int = Depends(get_current_user)):
             conn.close()
 
 @app.get("/api/get_watt_hours/custom/{table_name}")
-def get_custom_watt_hours(table_name: str, start_iso: str, end_iso: str):
+def get_custom_watt_hours(table_name: str, start_iso: str, end_iso: str, user_id: int = Depends(get_current_user)):
     if table_name not in VALID_TABLES:
         raise HTTPException(status_code=400, detail=f"Invalid table name: {table_name}")
         
     try:
-        # 使用 isoparse 自動解析前端發送的 ISO 8601 時間字串
-        start_isotime = isoparse(start_iso)
-        end_isotime = isoparse(end_iso)
-        taiwan_tz = pytz.timezone('Asia/Taipei')#設定台灣時區
-        start_temp_datetime = start_isotime.astimezone(taiwan_tz)
-        end_temp_datetime = end_isotime.astimezone(taiwan_tz)
-        start_datetime = start_temp_datetime.replace(tzinfo=None) #移除時區資訊
-        end_datetime = end_temp_datetime.replace(tzinfo=None)
+        # --- 修正處：將前端傳來的 UTC 時間轉換為台灣時間 ---
+        taiwan_tz = pytz.timezone('Asia/Taipei')
+        start_time_tw = isoparse(start_iso).astimezone(taiwan_tz)
+        end_time_tw = isoparse(end_iso).astimezone(taiwan_tz)
+        # --- 修正結束 ---
 
     except ValueError:
         raise HTTPException(status_code=400, detail="時間格式不正確，請使用 ISO 8601 格式。")
         
-    kwh = get_total_watt_hours_difference(start_datetime, end_datetime, table_name)
+    # 將轉換後的台灣時間傳遞給底層函式
+    kwh = get_total_watt_hours_difference(start_time_tw, end_time_tw, table_name)
     
     if kwh is None:
         raise HTTPException(status_code=404, detail="找不到指定時間範圍內的資料")
         
     return {"kilo_watt_hours": kwh}
 
-
 @app.get("/api/get_chart_data")
-async def get_chart_data(table_name: str, start_iso: str, end_iso: str,user_id: int = Depends(get_current_user)):
+async def get_chart_data(table_name: str, start_iso: str, end_iso: str, user_id: int = Depends(get_current_user)):
     """
     根據時間範圍和資料表名稱，取得即時用電數據。
-    - 所有數值 (watt, total_watt_hours, pf) 回傳時都四捨五入到小數後兩位。
-    - 時間戳記轉換為台灣時區，並移除毫秒和時區資訊。
-    - total_watt_hours 顯示為從所選時間範圍起點開始的累計數值。
+    (此版本包含偵錯用的 print 語句)
     """
     if table_name not in VALID_TABLES:
         raise HTTPException(status_code=400, detail=f"Invalid table name: {table_name}")
 
+    # ==================== DEBUG START ====================
+    print("\n--- [DEBUG] Entering get_chart_data ---")
+    print(f"1. Raw ISO strings received from frontend:")
+    print(f"   start_iso: {start_iso}")
+    print(f"   end_iso:   {end_iso}")
+    # ====================  DEBUG END  ====================
+
     db_connection = get_db_connection_from_pool()
-    cursor = db_connection.cursor(dictionary=True) # 使用 dictionary=True 讓結果以字典形式回傳
+    cursor = db_connection.cursor(dictionary=True)
 
     try:
-        # 轉為台灣時區
-        taiwan_tz =  pytz.timezone('Asia/Taipei')
+        taiwan_tz = pytz.timezone('Asia/Taipei')
 
-        start_time_utc = isoparse(start_iso).astimezone(taiwan_tz)
-        end_time_utc = isoparse(end_iso).astimezone(taiwan_tz)
+        start_time_utc = isoparse(start_iso)
+        end_time_utc = isoparse(end_iso)
 
-        start_time_str = start_time_utc.strftime('%Y-%m-%d %H:%M:%S')
-        end_time_str = end_time_utc.strftime('%Y-%m-%d %H:%M:%S')
+        start_time_tw = start_time_utc.astimezone(taiwan_tz)
+        end_time_tw = end_time_utc.astimezone(taiwan_tz)
+
+        # ==================== DEBUG START ====================
+        print(f"2. Converted to Taiwan Time (datetime objects):")
+        print(f"   start_time_tw: {start_time_tw}")
+        print(f"   end_time_tw:   {end_time_tw}")
+        # ====================  DEBUG END  ====================
+
+        start_time_str = start_time_tw.strftime('%Y-%m-%d %H:%M:%S')
+        end_time_str = end_time_tw.strftime('%Y-%m-%d %H:%M:%S')
+
+        # ==================== DEBUG START ====================
+        print(f"3. Final strings for SQL query:")
+        print(f"   start_time_str: '{start_time_str}'")
+        print(f"   end_time_str:   '{end_time_str}'")
+        print("-------------------------------------------\n")
+        # ====================  DEBUG END  ====================
 
         query = f"SELECT timestamp, watt, total_watt_hours, pf FROM `{table_name}` WHERE timestamp BETWEEN %s AND %s ORDER BY timestamp"
         cursor.execute(query, (start_time_str, end_time_str))
         rows = cursor.fetchall()
         
-        
-        
+        # (以下程式碼保持不變)
         formatted_data = []
         initial_watt_hours = None
 
         if rows:
-            # 取得第一筆資料的 total_watt_hours 作為基準值
             initial_watt_hours = rows[0]['total_watt_hours'] if rows[0]['total_watt_hours'] is not None else 0.0
 
             for row in rows:
-                # 計算新的累計 total_watt_hours
                 cumulative_watt_hours = 0.0
                 if initial_watt_hours is not None and row['total_watt_hours'] is not None:
                     cumulative_watt_hours = row['total_watt_hours'] - initial_watt_hours
 
-                # 將 UTC 時間戳記轉換為台灣時區並格式
                 formatted_timestamp = row['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
 
                 formatted_data.append({
@@ -645,7 +659,6 @@ async def get_chart_data(table_name: str, start_iso: str, end_iso: str,user_id: 
     finally:
         cursor.close()
         db_connection.close()
-
 
 @app.get("/api/get_watt_hours/{shift_type}/{table_name}")
 def get_shift_watt_hours(shift_type: str, table_name: str,user_id: int = Depends(get_current_user)):

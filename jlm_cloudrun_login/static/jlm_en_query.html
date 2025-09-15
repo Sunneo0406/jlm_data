@@ -241,39 +241,62 @@
         }
 
         // ... (此處省略 initCharts, renderChartData, setActiveButton, 等其他函式，它們保持不變)
-        function initCharts() {
-            const createRadialChartOptions = (label, color, unit, title) => ({
-                series: [0], chart: { height: 350, type: 'radialBar' },
-                plotOptions: { radialBar: { hollow: { size: '70%' }, dataLabels: { show: true, name: { offsetY: -10, show: true, color: '#888', fontSize: '20px', formatter: () => title }, value: { offsetY: 5, color: '#1f2937', fontSize: '24px', show: true, formatter: (val) => [`${parseFloat(val).toFixed(2)}`, unit] } } } },
-                fill: { colors: [color] }, labels: [label]
-            });
-            const commonLineChartOptions = { chart: { height: 250, type: 'line', zoom: { enabled: true } }, dataLabels: { enabled: false }, stroke: { curve: 'smooth', width: 3 }, xaxis: { type: 'datetime' }, tooltip: { x: { format: 'yyyy/MM/dd HH:mm:ss' } }, title: { align: 'left', style: { fontSize: '14px', fontWeight: 'bold', color: '#4a5568' } } };
-            const totalKwhOptions = createRadialChartOptions('總用電量', '#3B82F6', 'kWh', '總用電量');
-            const totalCo2eOptions = createRadialChartOptions('總碳排量', '#10B981', 'Kg', '總碳排量');
-            const todayKwhOptions = createRadialChartOptions('今日用電量', '#F59E0B', 'kWh', '今日用電量');
-            const todayCo2eOptions = createRadialChartOptions('今日碳排量', '#EF4444', 'Kg', '今日碳排量');
-            const pfOptions = { ...commonLineChartOptions, series: [{ name: '功率因數 (PF)', data: [] }], title: { ...commonLineChartOptions.title, text: '功率因數' }, colors: ['#FFC107'], yaxis: { min: 0, max: 1 } };
-            const wattOptions = { ...commonLineChartOptions, series: [{ name: '即時瓦特數 (Watt)', data: [] }], title: { ...commonLineChartOptions.title, text: '即時功率' }, colors: ['#E91E63'], yaxis: { min: 0 } };
-            const totalWattHoursOptions = { ...commonLineChartOptions, series: [{ name: '累計瓦特小時 (Wh)', data: [] }], title: { ...commonLineChartOptions.title, text: '累計電度' }, colors: ['#008FFB'], yaxis: { min: 0 } };
-            totalKwhChart = new ApexCharts(document.querySelector("#total-kwh-chart"), totalKwhOptions);
-            totalCo2eChart = new ApexCharts(document.querySelector("#total-co2e-chart"), totalCo2eOptions);
-            todayKwhChart = new ApexCharts(document.querySelector("#today-kwh-chart"), todayKwhOptions);
-            todayCo2eChart = new ApexCharts(document.querySelector("#today-co2e-chart"), todayCo2eOptions);
-            pfChart = new ApexCharts(document.querySelector("#pf-chart"), pfOptions);
-            wattChart = new ApexCharts(document.querySelector("#watt-chart"), wattOptions);
-            totalWattHoursChart = new ApexCharts(document.querySelector("#total-watt-hours-chart"), totalWattHoursOptions);
-            totalKwhChart.render(); totalCo2eChart.render(); todayKwhChart.render(); todayCo2eChart.render(); pfChart.render(); wattChart.render(); totalWattHoursChart.render();
-        }
+       function initCharts() {
+    const createRadialChartOptions = (label, color, unit, title) => ({
+        series: [0], chart: { height: 350, type: 'radialBar' },
+        plotOptions: { radialBar: { hollow: { size: '70%' }, dataLabels: { show: true, name: { offsetY: -10, show: true, color: '#888', fontSize: '20px', formatter: () => title }, value: { offsetY: 5, color: '#1f2937', fontSize: '24px', show: true, formatter: (val) => [`${parseFloat(val).toFixed(2)}`, unit] } } } },
+        fill: { colors: [color] }, labels: [label]
+    });
+
+    const commonLineChartOptions = {
+        chart: { height: 250, type: 'line', zoom: { enabled: true } },
+        dataLabels: { enabled: false },
+        stroke: { curve: 'smooth', width: 3 },
+        xaxis: {
+            type: 'datetime',
+            // ===== 新增的關鍵設定 =====
+            labels: {
+                datetimeUTC: false, // 強制圖表使用瀏覽器本地時間，而非 UTC
+                format: 'HH:mm'     // 您可以自訂時間軸標籤的格式
+            }
+            // =========================
+        },
+        tooltip: { x: { format: 'yyyy/MM/dd HH:mm:ss' } },
+        title: { align: 'left', style: { fontSize: '14px', fontWeight: 'bold', color: '#4a5568' } }
+    };
+
+    // 以下的圖表初始化程式碼保持不變
+    const totalKwhOptions = createRadialChartOptions('總用電量', '#3B82F6', 'kWh', '總用電量');
+    const totalCo2eOptions = createRadialChartOptions('總碳排量', '#10B981', 'Kg', '總碳排量');
+    const todayKwhOptions = createRadialChartOptions('今日用電量', '#F59E0B', 'kWh', '今日用電量');
+    const todayCo2eOptions = createRadialChartOptions('今日碳排量', '#EF4444', 'Kg', '今日碳排量');
+    const pfOptions = { ...commonLineChartOptions, series: [{ name: '功率因數 (PF)', data: [] }], title: { ...commonLineChartOptions.title, text: '功率因數' }, colors: ['#FFC107'], yaxis: { min: 0, max: 1 } };
+    const wattOptions = { ...commonLineChartOptions, series: [{ name: '即時瓦特數 (Watt)', data: [] }], title: { ...commonLineChartOptions.title, text: '即時功率' }, colors: ['#E91E63'], yaxis: { min: 0 } };
+    const totalWattHoursOptions = { ...commonLineChartOptions, series: [{ name: '累計瓦特小時 (Wh)', data: [] }], title: { ...commonLineChartOptions.title, text: '累計電度' }, colors: ['#008FFB'], yaxis: { min: 0 } };
+    totalKwhChart = new ApexCharts(document.querySelector("#total-kwh-chart"), totalKwhOptions);
+    totalCo2eChart = new ApexCharts(document.querySelector("#total-co2e-chart"), totalCo2eOptions);
+    todayKwhChart = new ApexCharts(document.querySelector("#today-kwh-chart"), todayKwhOptions);
+    todayCo2eChart = new ApexCharts(document.querySelector("#today-co2e-chart"), todayCo2eOptions);
+    pfChart = new ApexCharts(document.querySelector("#pf-chart"), pfOptions);
+    wattChart = new ApexCharts(document.querySelector("#watt-chart"), wattOptions);
+    totalWattHoursChart = new ApexCharts(document.querySelector("#total-watt-hours-chart"), totalWattHoursOptions);
+    totalKwhChart.render(); totalCo2eChart.render(); todayKwhChart.render(); todayCo2eChart.render(); pfChart.render(); wattChart.render(); totalWattHoursChart.render();
+}
+
         function renderChartData(data) {
-            const pfData = data.map(item => ({ x: new Date(item.timestamp).getTime(), y: item.pf }));
-            const wattData = data.map(item => ({ x: new Date(item.timestamp).getTime(), y: item.watt }));
-            const totalWattHoursData = data.map(item => ({ x: new Date(item.timestamp).getTime(), y: item.total_watt_hours }));
-            const maxWatt = Math.max(...wattData.map(item => item.y));
-            const maxTotalWattHours = Math.max(...totalWattHoursData.map(item => item.y));
-            wattChart.updateOptions({ yaxis: { max: maxWatt * 1.1, min: 0 } });
-            totalWattHoursChart.updateOptions({ yaxis: { max: maxTotalWattHours * 1.1, min: 0 } });
-            pfChart.updateSeries([{ data: pfData }]); wattChart.updateSeries([{ data: wattData }]); totalWattHoursChart.updateSeries([{ data: totalWattHoursData }]);
-        }
+        // 將 'YYYY-MM-DD HH:MM:SS' 格式中的空格替換為 'T'
+        // 讓 new Date() 能更可靠地將其解析為本地時間
+        const pfData = data.map(item => ({ x: new Date(item.timestamp.replace(' ', 'T')).getTime(), y: item.pf }));
+        const wattData = data.map(item => ({ x: new Date(item.timestamp.replace(' ', 'T')).getTime(), y: item.watt }));
+        const totalWattHoursData = data.map(item => ({ x: new Date(item.timestamp.replace(' ', 'T')).getTime(), y: item.total_watt_hours }));
+        
+        // 以下保持不變
+        const maxWatt = Math.max(...wattData.map(item => item.y));
+        const maxTotalWattHours = Math.max(...totalWattHoursData.map(item => item.y));
+        wattChart.updateOptions({ yaxis: { max: maxWatt * 1.1, min: 0 } });
+        totalWattHoursChart.updateOptions({ yaxis: { max: maxTotalWattHours * 1.1, min: 0 } });
+        pfChart.updateSeries([{ data: pfData }]); wattChart.updateSeries([{ data: wattData }]); totalWattHoursChart.updateSeries([{ data: totalWattHoursData }]);
+    }
         function setActiveButton(activeButton) {
             const allButtons = document.querySelectorAll('.flex-grow');
             allButtons.forEach(button => button.classList.remove('button-active'));
