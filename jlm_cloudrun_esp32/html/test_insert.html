@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Run 資料庫連線測試</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+        label, input, select, button { display: block; margin-bottom: 10px; }
+        input[type="number"], select { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { padding: 10px 15px; background-color: #007BFF; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        #response { margin-top: 20px; padding: 10px; border: 1px solid #ddd; background-color: #f9f9f9; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Cloud Run 資料寫入測試</h2>
+        <p>請輸入資料並選擇表格，然後點擊「送出」按鈕。</p>
+
+        <label for="cloudRunUrl">Cloud Run 服務網址:</label>
+        <input type="text" id="cloudRunUrl" value="YOUR_CLOUD_RUN_URL" placeholder="請輸入您的 Cloud Run 網址">
+
+        <label for="tableName">選擇表格:</label>
+        <select id="tableName">
+            <option value="120型">120型</option>
+            <option value="sensor_data1">sensor_data1</option>
+            <option value="sensor_data2">sensor_data2</option>
+            <option value="冰水機">冰水機</option>
+            <option value="空壓機">空壓機</option>
+            <option value="破碎機(220V)">破碎機(220V)</option>
+            <option value="雕刻機">雕刻機</option>
+        </select>
+
+        <label for="voltage">電壓 (V):</label>
+        <input type="number" id="voltage" step="0.01" value="220">
+
+        <label for="current">電流 (A):</label>
+        <input type="number" id="current" step="0.01" value="1.5">
+
+        <label for="frequency">頻率 (Hz):</label>
+        <input type="number" id="frequency" step="0.01" value="60">
+        
+        <label for="pf">功率因數 (PF):</label>
+        <input type="number" id="pf" step="0.01" value="0.95">
+
+        <label for="watt">瓦特 (W):</label>
+        <input type="number" id="watt" step="0.01" value="330">
+
+        <label for="total_watt_hours">總瓦特小時 (Wh):</label>
+        <input type="number" id="total_watt_hours" step="0.01" value="123456.78">
+        
+        <button onclick="submitData()">送出資料</button>
+
+        <div id="response">等待測試結果...</div>
+    </div>
+
+    <script>
+        async function submitData() {
+            const url = document.getElementById('cloudRunUrl').value;
+            const tableName = document.getElementById('tableName').value;
+            const responseDiv = document.getElementById('response');
+
+            if (!url || url === 'YOUR_CLOUD_RUN_URL') {
+                responseDiv.innerText = '請先輸入您的 Cloud Run 服務網址。';
+                return;
+            }
+
+            const data = {
+                voltage: parseFloat(document.getElementById('voltage').value),
+                current: parseFloat(document.getElementById('current').value),
+                frequency: parseFloat(document.getElementById('frequency').value),
+                pf: parseFloat(document.getElementById('pf').value),
+                watt: parseFloat(document.getElementById('watt').value),
+                total_watt_hours: parseFloat(document.getElementById('total_watt_hours').value)
+            };
+
+            responseDiv.innerText = '正在傳送資料...';
+
+            try {
+                const fullUrl = `${url}/insert_data/${tableName}`;
+                const response = await fetch(fullUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    responseDiv.innerText = '成功！ ' + JSON.stringify(result);
+                    responseDiv.style.color = 'green';
+                } else {
+                    responseDiv.innerText = '錯誤！ ' + JSON.stringify(result);
+                    responseDiv.style.color = 'red';
+                }
+            } catch (error) {
+                responseDiv.innerText = '連線失敗或發生錯誤: ' + error.message;
+                responseDiv.style.color = 'red';
+            }
+        }
+    </script>
+</body>
+</html>

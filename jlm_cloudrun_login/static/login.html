@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>捷綠盟能源登入系統</title>
+    <link rel="icon" type="image/png" href="img/favicon.png">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #4A697C; /* 背景藍綠色 */
+            background-image: url('img/bk1.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            padding: 1rem; /* 在 body 層級增加一點 padding，避免在極小螢幕貼邊 */
+            box-sizing: border-box;
+        }
+        .logo-image {
+            width: 100px; /* 設定寬度 */
+            height: auto; /* 讓高度自動等比例縮放 */
+        }
+
+        .login-container {
+            display: flex;
+            /* 步驟 2: 修改為彈性寬度 */
+            width: 100%; /* 基本寬度設為 100% */
+            max-width: 800px; /* 最大寬度不超過 800px，維持電腦版設計 */
+            min-height: 500px; /* 改用最小高度，讓內容可以撐開 */
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            border-radius: 12px;
+            overflow: hidden; /* 確保子元素的圓角生效 */
+            background-color: #FFFFFF; /* 將背景色移到這裡，方便手機版顯示 */
+        }
+
+        .left-panel {
+            background-color: #3A4D6E; /* 左側深藍色 */
+            color: white;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .left-panel h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .left-panel .signup-button {
+            background-color: transparent;
+            border: 1px solid white;
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .left-panel .signup-button:hover {
+            background-color: white;
+            color: #3A4D6E;
+        }
+
+        .right-panel {
+            /* background-color: #FFFFFF; /* 已移到 .login-container */
+            flex: 1.2; /* 讓右側比左側寬一點 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 3rem;
+        }
+
+        .right-panel h2 {
+            color: #333;
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 2.5rem;
+        }
+
+        .form-group {
+            width: 100%;
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem 0.5rem;
+            border: none;
+            border-bottom: 1px solid #ddd;
+            background-color: transparent;
+            font-size: 1rem;
+            outline: none; /* 移除點擊時的藍色外框 */
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            border-bottom-color: #E77E4D; /* 焦點橘色 */
+        }
+
+        .options {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-bottom: 2rem;
+        }
+
+        .options .forgot-password {
+            color: #888;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .options .forgot-password:hover {
+            text-decoration: underline;
+        }
+
+        .signin-button {
+            width: 120px;
+            padding: 0.75rem;
+            background-color: #E77E4D; /* 登入按鈕橘色 */
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            box-shadow: 0 4px 15px rgba(231, 126, 77, 0.4);
+            transition: background-color 0.3s;
+        }
+
+        .signin-button:hover {
+            background-color: #d96d3a;
+        }
+        
+        #message {
+            margin-top: 1.5rem;
+            font-weight: bold;
+            height: 20px; /* 給予固定高度防止排版跳動 */
+        }
+        
+        /* 步驟 3: 加入 Media Query 處理手機版樣式 */
+        @media screen and (max-width: 768px) {
+            .login-container {
+                flex-direction: column; /* 將左右並排改為上下堆疊 */
+                height: auto; /* 高度自動 */
+                min-height: 0;
+            }
+
+            .left-panel {
+                /* 在手機上可以稍微減少一點比例，或讓它自適應 */
+                padding: 2rem 1rem;
+            }
+
+            .left-panel h1 {
+                font-size: 2rem; /* 稍微縮小標題字體 */
+            }
+
+            .right-panel {
+                padding: 2.5rem 1.5rem; /* 調整內邊距 */
+            }
+
+            .right-panel h2 {
+                font-size: 1.8rem; /* 稍微縮小標題字體 */
+                margin-bottom: 2rem;
+            }
+
+            #login-form {
+                width: 100%; /* 表單在手機上佔滿寬度 */
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="login-container">
+        <div class="left-panel">
+	        <img src='img/jlm.png' class="logo-image">
+            <h1>捷綠盟能源</br>洞察器</h1>
+        </div>
+        <div class="right-panel">
+            <h2>歡迎捷綠盟的夥伴</h2>
+            <form id="login-form" style="width: 80%;">
+                <div class="form-group">
+                    <input type="text" id="account" name="account" placeholder="帳號" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="password" name="password" placeholder="密碼" required>
+                </div>
+                <div class="options">
+                    <a href="forgot_password.html" class="forgot-password">忘記密碼?</a>
+                    <button type="submit" class="signin-button">登入</button>
+                </div>
+            </form>
+            <p id="message"></p>
+        </div>
+    </div>
+
+   <script>
+    // 您的 JavaScript 邏輯可以保持不變
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const account = document.getElementById('account').value;
+        const password = document.getElementById('password').value;
+        const messageEl = document.getElementById('message');
+
+        try {
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ account, password })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                localStorage.setItem('access_token', data.access_token);
+                messageEl.textContent = '登入成功!';
+                messageEl.style.color = 'green';
+                
+                setTimeout(() => {
+                    window.location.href = "jlm_en_query.html";
+                }, 100);
+
+            } else {
+                const data = await response.json();
+                messageEl.textContent = data.detail || '登入失敗';
+                messageEl.style.color = 'red';
+            }
+        } catch (error) {
+            messageEl.textContent = '網路錯誤，請稍後再試。';
+            messageEl.style.color = 'red';
+        }
+    });
+</script>
+
+</body>
+</html>

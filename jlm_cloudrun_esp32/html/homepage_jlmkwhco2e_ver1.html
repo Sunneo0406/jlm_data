@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>能源數據面板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #ffffff;
+            color: #1a202c;
+        }
+
+        .number-display {
+            font-family: monospace;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+
+        @keyframes breathe {
+            0%, 100% {
+                transform: scale(1);
+                color: #1a202c; /* 文字顏色改為黑色 */
+                box-shadow: 0 0px 10px rgba(0, 0, 0, 0.1);
+            }
+
+            50% {
+                transform: scale(1.05);
+                color: #059669; /* 文字顏色改為更深的綠色 */
+                box-shadow: 0 0px 20px rgba(5, 150, 105, 0.5); /* 陰影顏色改為更深的綠色 */
+            }
+        }
+
+        .breathe-animation {
+            animation: breathe 3s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center p-2">
+
+    <div id="data-container" class="w-full max-w-4xl p-8 bg-white rounded-2xl">
+        
+
+        <!-- 總用電量和總碳排量區塊 -->
+        <div id="latest-data-panel" class="flex flex-col md:flex-row items-center justify-around space-y-8 md:space-y-0 md:space-x-8 text-center">
+            <!-- 總用電量區塊 -->
+            <div id="kwh-card" class="flex-1 flex flex-col items-center justify-center w-48 h-48 bg-white rounded-full shadow-lg">
+                <span class="text-xl font-medium text-gray-600">總用電量</span>
+                <div class="mt-2">
+                    <span id="kwh-value" class="number-display">0</span>
+                    <span class="text-base text-gray-500 font-medium"> Kwh</span>
+                </div>
+            </div>
+
+            <!-- 分隔線 -->
+            <div class="hidden md:block w-1 h-24 bg-gray-200 rounded-full"></div>
+            <div class="block md:hidden w-24 h-1 bg-gray-200 rounded-full"></div>
+
+            <!-- 總碳排量區塊 -->
+            <div id="co2e-card" class="flex-1 flex flex-col items-center justify-center w-48 h-48 bg-white rounded-full shadow-lg">
+                <span class="text-xl font-medium text-gray-600">總碳排量</span>
+                <div class="mt-2">
+                    <span id="co2e-value" class="number-display">0</span>
+                    <span class="text-base text-gray-500 font-medium"> KgCo2e</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 新增本日用電量和碳排量區塊 -->
+        <div id="daily-data-panel" class="flex flex-col md:flex-row items-center justify-around mt-8 space-y-8 md:space-y-0 md:space-x-8 text-center">
+            <!-- 本日用電量區塊 -->
+            <div id="daily-kwh-card" class="flex-1 flex flex-col items-center justify-center w-48 h-48 bg-white rounded-full shadow-lg">
+                <span class="text-xl font-medium text-gray-600">本日用電量</span>
+                <div class="mt-2">
+                    <span id="daily-kwh-value" class="number-display">0</span>
+                    <span class="text-base text-gray-500 font-medium"> Kwh</span>
+                </div>
+            </div>
+
+            <!-- 分隔線 -->
+            <div class="hidden md:block w-1 h-24 bg-gray-200 rounded-full"></div>
+            <div class="block md:hidden w-24 h-1 bg-gray-200 rounded-full"></div>
+
+            <!-- 本日碳排量區塊 -->
+            <div id="daily-co2e-card" class="flex-1 flex flex-col items-center justify-center w-48 h-48 bg-white rounded-full shadow-lg">
+                <span class="text-xl font-medium text-gray-600">本日碳排量</span>
+                <div class="mt-2">
+                    <span id="daily-co2e-value" class="number-display">0</span>
+                    <span class="text-base text-gray-500 font-medium"> KgCo2e</span>
+                </div>
+            </div>
+        </div>
+        <div id="error-message" class="hidden text-center text-lg text-red-500 mt-8">
+            無法載入資料。請檢查 API 伺服器或網路連線。
+        </div>
+    </div>
+
+    <script>
+        // API 網址與碳排放係數
+        const API_URL_LATEST = 'https://jlm-co2e-db-connect-221081318298.asia-east1.run.app/api/get_total_latest_kwh';
+        const API_URL_DAILY = 'https://jlm-co2e-db-connect-221081318298.asia-east1.run.app/api/get_total_daily_kwh';
+        const CO2E_FACTOR = 0.495; // 碳排係數: KgCo2e/Kwh
+
+        // 獲取 DOM 元素
+        const kwhValueEl = document.getElementById('kwh-value');
+        const co2eValueEl = document.getElementById('co2e-value');
+        const kwhCardEl = document.getElementById('kwh-card');
+        const co2eCardEl = document.getElementById('co2e-card');
+        const latestDataPanelEl = document.getElementById('latest-data-panel');
+        const errorEl = document.getElementById('error-message');
+
+        // 本日數據的 DOM 元素
+        const dailyKwhValueEl = document.getElementById('daily-kwh-value');
+        const dailyCo2eValueEl = document.getElementById('daily-co2e-value');
+        const dailyKwhCardEl = document.getElementById('daily-kwh-card');
+        const dailyCo2eCardEl = document.getElementById('daily-co2e-card');
+
+        // 數字平滑滾動動畫函式
+        function animateValue(obj, start, end, duration) {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                const currentValue = start + progress * (end - start);
+                obj.textContent = Math.round(currentValue).toLocaleString(); // 四捨五入並加入千分位
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                } else {
+                    obj.textContent = Math.round(end).toLocaleString();
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        // 獲取數據並啟動動畫
+        async function fetchData() {
+            latestDataPanelEl.classList.remove('hidden');
+            errorEl.classList.add('hidden');
+
+            try {
+                // 獲取總用電量數據
+                const latestResponse = await fetch(API_URL_LATEST);
+                if (!latestResponse.ok) {
+                    throw new Error(`HTTP 錯誤! 狀態: ${latestResponse.status}`);
+                }
+                const latestData = await latestResponse.json();
+
+                const totalKwh = latestData.total_kwh || 0;
+                const totalCo2e = (totalKwh * CO2E_FACTOR).toFixed(2);
+
+                // 啟動總數據的動畫
+                animateValue(kwhValueEl, 0, totalKwh, 3000);
+                animateValue(co2eValueEl, 0, Math.round(totalCo2e), 3000);
+                kwhCardEl.classList.add('breathe-animation');
+                co2eCardEl.classList.add('breathe-animation');
+
+                // 獲取本日用電量數據
+                const dailyResponse = await fetch(API_URL_DAILY);
+                if (!dailyResponse.ok) {
+                    throw new Error(`HTTP 錯誤! 狀態: ${dailyResponse.status}`);
+                }
+                const dailyData = await dailyResponse.json();
+
+                const dailyKwh = dailyData.total_kwh || 0;
+                const dailyCo2e = (dailyKwh * CO2E_FACTOR).toFixed(2);
+
+                // 啟動本日數據的動畫
+                animateValue(dailyKwhValueEl, 0, dailyKwh, 3000);
+                animateValue(dailyCo2eValueEl, 0, Math.round(dailyCo2e), 3000);
+                dailyKwhCardEl.classList.add('breathe-animation');
+                dailyCo2eCardEl.classList.add('breathe-animation');
+
+
+            } catch (error) {
+                console.error('獲取數據時發生錯誤:', error);
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+        // 在頁面載入時執行
+        window.onload = fetchData;
+    </script>
+
+</body>
+</html>

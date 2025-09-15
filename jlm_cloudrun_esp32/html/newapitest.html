@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 測試工具</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-2xl text-center">
+        <h1 class="text-3xl font-bold mb-6 text-gray-800">API 測試工具</h1>
+        <p class="text-gray-600 mb-8">點擊下方按鈕以呼叫 API 並檢查回傳資料。</p>
+
+        <!-- 顯示 API URL -->
+        <div class="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <p class="text-sm font-medium text-gray-500">API 端點：</p>
+            <p id="api-url" class="text-gray-700 break-words mt-1">https://jlm-co2e-db-connect-221081318298.asia-east1.run.app/api/get_total_daily_kwh</p>
+        </div>
+
+        <!-- 測試按鈕 -->
+        <button id="test-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full shadow-md transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
+            呼叫 API
+        </button>
+
+        <!-- 載入指示器 -->
+        <div id="loading" class="mt-8 hidden">
+            <div class="animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent mx-auto"></div>
+            <p class="mt-4 text-gray-600">正在載入...</p>
+        </div>
+
+        <!-- 結果顯示區塊 -->
+        <div id="result-container" class="mt-8 hidden bg-gray-50 p-6 rounded-lg border border-gray-200 text-left">
+            <h2 class="text-xl font-semibold mb-3 text-gray-700">API 回應：</h2>
+            <pre id="api-response" class="text-gray-800 whitespace-pre-wrap break-words text-sm leading-relaxed"></pre>
+        </div>
+
+        <!-- 錯誤訊息區塊 -->
+        <div id="error-container" class="mt-8 hidden bg-red-100 p-6 rounded-lg border border-red-300 text-left">
+            <h2 class="text-xl font-semibold mb-3 text-red-700">錯誤：</h2>
+            <p id="error-message" class="text-red-800 break-words text-sm leading-relaxed"></p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const testButton = document.getElementById('test-button');
+            const loadingIndicator = document.getElementById('loading');
+            const resultContainer = document.getElementById('result-container');
+            const apiResponse = document.getElementById('api-response');
+            const errorContainer = document.getElementById('error-container');
+            const errorMessage = document.getElementById('error-message');
+            const apiUrl = document.getElementById('api-url').textContent;
+
+            testButton.addEventListener('click', async () => {
+                // 隱藏之前的結果和錯誤訊息
+                resultContainer.classList.add('hidden');
+                errorContainer.classList.add('hidden');
+                
+                // 顯示載入中
+                loadingIndicator.classList.remove('hidden');
+
+                try {
+                    const response = await fetch(apiUrl);
+                    
+                    // 檢查回應是否成功
+                    if (!response.ok) {
+                        throw new Error(`HTTP 錯誤! 狀態碼: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    
+                    // 顯示 JSON 格式化的回應
+                    apiResponse.textContent = JSON.stringify(data, null, 2);
+                    resultContainer.classList.remove('hidden');
+
+                } catch (error) {
+                    // 顯示錯誤訊息
+                    console.error("呼叫 API 時發生錯誤:", error);
+                    errorMessage.textContent = error.message;
+                    errorContainer.classList.remove('hidden');
+
+                } finally {
+                    // 隱藏載入中
+                    loadingIndicator.classList.add('hidden');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

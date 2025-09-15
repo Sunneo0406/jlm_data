@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>捷綠盟碳排觀察器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            /* 更換為柔和的漸層背景 */
+            background: linear-gradient(to bottom right, #e0e7ff, #f3e8ff);
+        }
+
+        .apexcharts-canvas {
+            margin: 0 auto;
+        }
+
+        .button-active {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+            transform: translateY(2px);
+        }
+
+        /* 呼吸動畫，用於凸顯重要資訊 */
+        @keyframes pulse-animation {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+
+        .breathing-pulse {
+            animation: pulse-animation 2.5s infinite;
+        }
+
+        /* 按鈕漸層與陰影效果 */
+        .btn-gradient {
+            background-image: linear-gradient(to right, #3b82f6, #60a5fa);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+        .btn-gradient:hover {
+            background-image: linear-gradient(to right, #60a5fa, #3b82f6);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="container mx-auto max-w-4xl bg-white p-8 rounded-3xl shadow-2xl space-y-8">
+
+        <!-- 標題區塊 -->
+        <div class="flex items-center justify-center mb-8 p-6 rounded-2xl bg-gradient-to-r from-blue-500 to-teal-400 shadow-xl">
+            <!-- 替換為本地圖片URL -->
+            <img src="img/jlm.png" alt="捷綠盟公司Logo" class="w-12 h-12 mr-4 rounded-full">
+            <h1 class="text-3xl font-bold text-white tracking-wide">捷綠盟用電總覽與查詢</h1>
+        </div>
+
+        <!-- 總用電量與碳排量圖表區 -->
+        <div id="dashboard-charts" class="flex flex-col md:flex-row justify-center items-center space-y-8 md:space-y-0 md:space-x-8">
+            <div id="total-kwh-chart" class="w-full md:w-1/2 bg-gray-50 rounded-2xl p-4 shadow-inner breathing-pulse"></div>
+            <div id="total-co2e-chart" class="w-full md:w-1/2 bg-gray-50 rounded-2xl p-4 shadow-inner breathing-pulse"></div>
+        </div>
+
+        <!-- 今日用電量與碳排量圖表區 -->
+        <div id="daily-charts" class="flex flex-col md:flex-row justify-center items-center space-y-8 md:space-y-0 md:space-x-8">
+            <div id="today-kwh-chart" class="w-full md:w-1/2 bg-gray-50 rounded-2xl p-4 shadow-inner breathing-pulse"></div>
+            <div id="today-co2e-chart" class="w-full md:w-1/2 bg-gray-50 rounded-2xl p-4 shadow-inner breathing-pulse"></div>
+        </div>
+
+        <!-- 曲線圖數據區塊 -->
+        <div class="bg-white p-6 rounded-2xl shadow-lg border border-blue-200">
+            <h2 class="text-xl font-semibold text-blue-700 mb-4">曲線圖數據</h2>
+            <div class="flex flex-col gap-8">
+                <div id="watt-chart" class="w-full"></div>
+                <div id="total-watt-hours-chart" class="w-full"></div>
+            </div>
+            <div id="pf-chart" class="w-full mt-8"></div>
+        </div>
+
+        <!-- 查詢區塊 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-white p-6 rounded-2xl shadow-lg border border-blue-200">
+                <h2 class="text-xl font-semibold text-blue-700 mb-4">班次快速查詢<span style="font-size: 12px;">(僅供快速查詢，不會有曲線圖)</span></h2>
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <!-- 應用新的按鈕樣式 -->
+                    <button id="day_shift_btn" onclick="fetchShiftData('day_shift', this)" class="flex-grow py-3 px-6 text-white font-bold rounded-full transition-colors btn-gradient">前日早班</button>
+                    <button id="night_shift_btn" onclick="fetchShiftData('night_shift', this)" class="flex-grow py-3 px-6 text-white font-bold rounded-full transition-colors btn-gradient">前日晚班</button>
+                    <button id="since_morning_btn" onclick="fetchShiftData('since_morning', this)" class="flex-grow py-3 px-6 text-white font-bold rounded-full transition-colors btn-gradient">今日早班至今</button>
+                </div>
+                <div class="flex flex-col space-y-4">
+                    <label for="tableName" class="block text-gray-700 font-medium">選擇電錶:</label>
+                    <select id="tableName" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="冰水機">冰水機</option>
+                        <option value="空壓機">空壓機</option>
+                        <option value="120型">120型</option>
+                        <option value="sensor_data1">第一集電箱</option>
+                        <option value="sensor_data2">第二集電箱</option>
+                        <option value="破碎機(220V)">破碎機(220V)</option>
+                        <option value="雕刻機">雕刻機</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-lg border border-blue-200">
+                <h2 class="text-xl font-semibold text-blue-700 mb-4">自訂區間查詢<span style="font-size: 12px;">(精準查詢並列出曲線圖)</span></h2>
+                <div class="space-y-4">
+                    <label for="startTime" class="block text-gray-700 font-medium">開始時間:</label>
+                    <input type="datetime-local" id="startTime" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label for="endTime" class="block text-gray-700 font-medium">結束時間:</label>
+                    <input type="datetime-local" id="endTime" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <!-- 應用新的按鈕樣式 -->
+                <button onclick="fetchCustomPeriodData(this)" class="mt-6 w-full py-3 px-6 text-white font-bold rounded-full transition-colors btn-gradient">查詢自訂區間</button>
+            </div>
+        </div>
+
+        <!-- 查詢結果與匯出區塊並排顯示 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- 查詢結果顯示區塊 -->
+            <div class="bg-blue-50 p-6 rounded-2xl shadow-inner border border-blue-200">
+                <h2 class="text-xl font-semibold text-blue-700 mb-2">查詢結果:</h2>
+                <div id="response-display" class="text-2xl text-gray-800 font-bold">請點擊按鈕進行查詢...</div>
+                <div id="co2e-display" class="text-2xl text-gray-600 mt-2"></div>
+                <div id="query-time-display" class="text-sm text-gray-500 mt-2"></div>
+            </div>
+
+            <!-- 資料匯出區塊 -->
+            <div class="bg-white p-6 rounded-2xl shadow-lg border border-blue-200">
+                <h2 class="text-xl font-semibold text-blue-700 mb-4">資料匯出<span style="font-size: 12px;">(匯出為 Excel 檔案)</span></h2>
+                <div class="space-y-4">
+                    <label for="exportStartTime" class="block text-gray-700 font-medium">開始時間:</label>
+                    <input type="datetime-local" id="exportStartTime" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label for="exportEndTime" class="block text-gray-700 font-medium">結束時間:</label>
+                    <input type="datetime-local" id="exportEndTime" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <button onclick="exportToExcel(this)" class="mt-6 w-full py-3 px-6 text-white font-bold rounded-full transition-colors btn-gradient">匯出為 Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CLOUD_RUN_URL = 'https://jlm-co2e-db-connect-221081318298.asia-east1.run.app';
+        const TAIPOWER_CO2E_FACTOR = 0.495;
+        const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
+        const MAX_HOURS = 24;
+        const MAX_EXPORT_DAYS = 30;
+
+        let totalKwhChart, totalCo2eChart, todayKwhChart, todayCo2eChart, pfChart, wattChart, totalWattHoursChart;
+
+        function initCharts() {
+            const createRadialChartOptions = (label, color, unit, title) => ({
+                series: [0],
+                chart: {
+                    height: 350,
+                    type: 'radialBar',
+                    // --- 在這裡加入動畫設定 ---
+                    animations: {
+                        enabled: true,
+                        easing: 'easeinout', // 動畫的緩動效果，例如 'linear', 'easein', 'easeout', 'easeinout'
+                        speed: 1000, // 動畫從開始到結束的速度（毫秒）
+                        animateGradually: {
+                            enabled: true,
+                            delay: 150 // 每個數據系列之間的延遲（對於多系列圖表）
+                        },
+                        dynamicAnimation: {
+                            enabled: true,
+                            speed: 350 // 當數據動態變化時的動畫速度
+                        }
+                    }
+                },
+                plotOptions: {
+                    radialBar: {
+                        hollow: { size: '70%' },
+                        dataLabels: {
+                            show: true,
+                            name: {
+                                offsetY: -10,
+                                show: true,
+                                color: '#888',
+                                fontSize: '20px',
+                                formatter: () => title
+                            },
+                            value: {
+                                offsetY: 5,
+                                color: '#1f2937',
+                                fontSize: '24px',
+                                show: true,
+                                formatter: (val) => [`${parseFloat(val).toFixed(2)}`, unit]
+                            }
+                        }
+                    }
+                },
+                fill: { colors: [color] },
+                labels: [label]
+            });
+
+            const commonLineChartOptions = {
+                chart: {
+                    height: 250,
+                    type: 'line',
+                    zoom: { enabled: true }
+                },
+                dataLabels: { enabled: false },
+                stroke: { curve: 'smooth', width: 3 }, // 調整線條粗細
+                xaxis: { type: 'datetime' },
+                tooltip: { x: { format: 'yyyy/MM/dd HH:mm:ss' } },
+                title: { // 調整標題樣式以避免重疊
+                    align: 'left',
+                    style: {
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        color: '#4a5568'
+                    }
+                }
+            };
+            
+            // 初始化所有四個圓形圖
+            const totalKwhOptions = createRadialChartOptions('總用電量', '#3B82F6', 'kWh', '總用電量');
+            const totalCo2eOptions = createRadialChartOptions('總碳排量', '#10B981', 'Kg', '總碳排量');
+            const todayKwhOptions = createRadialChartOptions('今日用電量', '#F59E0B', 'kWh', '今日用電量');
+            const todayCo2eOptions = createRadialChartOptions('今日碳排量', '#EF4444', 'Kg', '今日碳排量');
+
+            const pfOptions = { ...commonLineChartOptions, series: [{ name: '功率因數 (PF)', data: [] }], title: { ...commonLineChartOptions.title, text: '功率因數' }, colors: ['#FFC107'], yaxis: { min: 0, max: 1 } };
+            const wattOptions = { ...commonLineChartOptions, series: [{ name: '即時瓦特數 (Watt)', data: [] }], title: { ...commonLineChartOptions.title, text: '即時功率' }, colors: ['#E91E63'], yaxis: { min: 0 } };
+            const totalWattHoursOptions = { ...commonLineChartOptions, series: [{ name: '累計瓦特小時 (Wh)', data: [] }], title: { ...commonLineChartOptions.title, text: '累計電度' }, colors: ['#008FFB'], yaxis: { min: 0 } };
+            
+            totalKwhChart = new ApexCharts(document.querySelector("#total-kwh-chart"), totalKwhOptions);
+            totalCo2eChart = new ApexCharts(document.querySelector("#total-co2e-chart"), totalCo2eOptions);
+            todayKwhChart = new ApexCharts(document.querySelector("#today-kwh-chart"), todayKwhOptions);
+            todayCo2eChart = new ApexCharts(document.querySelector("#today-co2e-chart"), todayCo2eOptions);
+            
+            pfChart = new ApexCharts(document.querySelector("#pf-chart"), pfOptions);
+            wattChart = new ApexCharts(document.querySelector("#watt-chart"), wattOptions);
+            totalWattHoursChart = new ApexCharts(document.querySelector("#total-watt-hours-chart"), totalWattHoursOptions);
+
+            totalKwhChart.render();
+            totalCo2eChart.render();
+            todayKwhChart.render();
+            todayCo2eChart.render();
+            pfChart.render();
+            wattChart.render();
+            totalWattHoursChart.render();
+
+            setTimeout(() => {
+                fetchTotalData();
+            }, 200); // 延遲 200 毫秒，您可以調整這個時間
+        }
+
+        function renderChartData(data) {
+            const pfData = data.map(item => ({ x: new Date(item.timestamp).getTime(), y: item.pf }));
+            const wattData = data.map(item => ({ x: new Date(item.timestamp).getTime(), y: item.watt }));
+            const totalWattHoursData = data.map(item => ({ x: new Date(item.timestamp).getTime(), y: item.total_watt_hours }));
+
+            const maxWatt = Math.max(...wattData.map(item => item.y));
+            const maxTotalWattHours = Math.max(...totalWattHoursData.map(item => item.y));
+
+            wattChart.updateOptions({ yaxis: { max: maxWatt * 1.1, min: 0 } });
+            totalWattHoursChart.updateOptions({ yaxis: { max: maxTotalWattHours * 1.1, min: 0 } });
+
+            pfChart.updateSeries([{ data: pfData }]);
+            wattChart.updateSeries([{ data: wattData }]);
+            totalWattHoursChart.updateSeries([{ data: totalWattHoursData }]);
+        }
+
+        function setActiveButton(activeButton) {
+            const allButtons = document.querySelectorAll('.flex-grow');
+            allButtons.forEach(button => button.classList.remove('button-active'));
+            if (activeButton) {
+                activeButton.classList.add('button-active');
+            }
+        }
+
+        async function fetchTotalData() {
+            // 1. 在這裡定義您的目標最大值
+            const totalKwhGoal = 200000;  // 假設總用電量的目標是 200,000 kWh
+            const dailyKwhGoal = 500;    // 假設每日用電量的目標是 500 kWh
+
+            // 2. 根據用電量目標和碳排係數，自動換算出碳排的目標最大值
+            const totalCo2eGoal = totalKwhGoal * TAIPOWER_CO2E_FACTOR;
+            const dailyCo2eGoal = dailyKwhGoal * TAIPOWER_CO2E_FACTOR;
+
+            try {
+                // 獲取總用電量與碳排量
+                const totalResponse = await fetch(`${CLOUD_RUN_URL}/api/get_total_latest_kwh`);
+                const totalResult = await totalResponse.json();
+                if (totalResponse.ok) {
+                    const totalKwh = totalResult.total_kwh;
+                    const totalCo2e = totalKwh * TAIPOWER_CO2E_FACTOR;
+                    const totalPercentage = (totalKwh / totalKwhGoal) * 100;
+                    const totalCo2ePercentage = (totalCo2e / totalCo2eGoal) * 100;
+
+                    // --- 合併更新總用電量圖表 ---
+                    totalKwhChart.updateOptions({
+                        series: [totalPercentage], // 將 series 數據放在這裡
+                        plotOptions: {
+                            radialBar: { dataLabels: { value: { formatter: (val) => `${totalKwh.toFixed(2)} kWh` } } }
+                        }
+                    });
+
+                    // --- 合併更新總碳排量圖表 ---
+                    totalCo2eChart.updateOptions({
+                        series: [totalCo2ePercentage], // 將 series 數據放在這裡
+                        plotOptions: {
+                            radialBar: { dataLabels: { value: { formatter: (val) => `${totalCo2e.toFixed(2)} Kg` } } }
+                        }
+                    });
+
+                    console.log('總數據更新成功:', totalResult);
+                } else {
+                    console.error('API 錯誤:', totalResult);
+                }
+
+                // 獲取今日用電量與碳排量
+                const todayResponse = await fetch(`${CLOUD_RUN_URL}/api/get_total_daily_kwh`);
+                const todayResult = await todayResponse.json();
+                if (todayResponse.ok) {
+                    const todayKwh = todayResult.total_kwh;
+                    const todayCo2e = todayKwh * TAIPOWER_CO2E_FACTOR;
+                    const dailyPercentage = (todayKwh / dailyKwhGoal) * 100;
+                    const dailyCo2ePercentage = (todayCo2e / dailyCo2eGoal) * 100;
+
+                    // --- 合併更新今日用電量圖表 ---
+                    todayKwhChart.updateOptions({
+                        series: [dailyPercentage], // 將 series 數據放在這裡
+                        plotOptions: {
+                            radialBar: { dataLabels: { value: { formatter: (val) => `${todayKwh.toFixed(2)} kWh` } } }
+                        }
+                    });
+
+                    // --- 合併更新今日碳排量圖表 ---
+                    todayCo2eChart.updateOptions({
+                        series: [dailyCo2ePercentage], // 將 series 數據放在這裡
+                        plotOptions: {
+                            radialBar: { dataLabels: { value: { formatter: (val) => `${todayCo2e.toFixed(2)} Kg` } } }
+                        }
+                    });
+
+                    console.log('今日數據更新成功:', todayResult);
+                } else {
+                    console.error('今日API 錯誤:', todayResult);
+                }
+            } catch (error) {
+                console.error('連線錯誤:', error);
+            }
+        }
+
+        async function fetchShiftData(shiftType, buttonElement) {
+            setActiveButton(buttonElement);
+            const startTime = new Date();
+            const tableName = document.getElementById('tableName').value;
+            const responseDisplay = document.getElementById('response-display');
+            const co2eDisplay = document.getElementById('co2e-display');
+            const queryTimeDisplay = document.getElementById('query-time-display');
+
+            const titleMap = {
+                'day_shift': '前日早班',
+                'night_shift': '前日晚班',
+                'since_morning': '今日早班至今'
+            };
+            const title = titleMap[shiftType] || '查詢';
+
+            const url = `${CLOUD_RUN_URL}/api/get_watt_hours/${shiftType}/${tableName}`;
+
+            responseDisplay.innerHTML = `<strong>正在查詢 ${tableName} 的 ${title} 資料...</strong>`;
+            co2eDisplay.innerHTML = '';
+            queryTimeDisplay.innerHTML = '';
+
+            try {
+                const response = await fetch(url);
+                const result = await response.json();
+                const endTime = new Date();
+                const elapsedTime = endTime - startTime;
+
+                if (response.ok) {
+                    const kwh = result.kilo_watt_hours;
+                    const co2e = kwh * TAIPOWER_CO2E_FACTOR;
+                    responseDisplay.innerHTML = `<strong>${tableName}</strong><br><strong>${title}</strong> 共使用 ${kwh.toFixed(2)} 度電`;
+                    co2eDisplay.innerHTML = `<strong>${title}產生</strong><span style="color: red;font-size: 40px;"> ${co2e.toFixed(2)} </span>公斤碳排`;
+                    queryTimeDisplay.innerHTML = `查詢完成，耗時 ${elapsedTime} 毫秒`;
+                    console.log('單一電錶查詢成功:', result);
+                } else {
+                    responseDisplay.innerHTML = `<strong class="text-red-500">錯誤：</strong> ${result.detail || '未知的錯誤'}`;
+                    co2eDisplay.innerHTML = '';
+                    queryTimeDisplay.innerHTML = `查詢失敗，耗時 ${elapsedTime} 毫秒`;
+                    console.error('API 錯誤:', result);
+                }
+            } catch (error) {
+                const endTime = new Date();
+                const elapsedTime = endTime - startTime;
+                responseDisplay.innerHTML = `<strong class="text-red-500">連線失敗或錯誤：</strong> ${error.message}`;
+                co2eDisplay.innerHTML = '';
+                queryTimeDisplay.innerHTML = `查詢失敗，耗時 ${elapsedTime} 毫秒`;
+                console.error('連線錯誤:', error);
+            }
+        }
+
+        async function fetchCustomPeriodData(buttonElement) {
+            setActiveButton(buttonElement);
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+            const tableName = document.getElementById('tableName').value;
+            const responseDisplay = document.getElementById('response-display');
+            const co2eDisplay = document.getElementById('co2e-display');
+            const queryTimeDisplay = document.getElementById('query-time-display');
+
+            if (!startTime || !endTime) {
+                responseDisplay.innerHTML = '<strong class="text-red-500">錯誤：請選擇起始和結束時間。</strong>';
+                co2eDisplay.innerHTML = '';
+                return;
+            }
+
+            const startDate = new Date(startTime);
+            const endDate = new Date(endTime);
+            const timeDifference = endDate.getTime() - startDate.getTime();
+
+            if (timeDifference > MAX_HOURS * MILLISECONDS_PER_HOUR) {
+                responseDisplay.innerHTML = `<strong class="text-red-500">錯誤：時間區間不能超過 ${MAX_HOURS} 小時。</strong>`;
+                co2eDisplay.innerHTML = '';
+                return;
+            }
+
+            const startISO = startDate.toISOString();
+            const endISO = endDate.toISOString();
+
+            const chartUrl = `${CLOUD_RUN_URL}/api/get_chart_data?table_name=${tableName}&start_iso=${startISO}&end_iso=${endISO}`;
+            const kwhUrl = `${CLOUD_RUN_URL}/api/get_watt_hours/custom/${tableName}?start_iso=${startISO}&end_iso=${endISO}`;
+
+            responseDisplay.innerHTML = `<strong>正在查詢 ${tableName} 的自訂區間資料...</strong>`;
+            co2eDisplay.innerHTML = '';
+            queryTimeDisplay.innerHTML = '';
+
+            try {
+                const [chartResponse, kwhResponse] = await Promise.all([
+                    fetch(chartUrl),
+                    fetch(kwhUrl)
+                ]);
+
+                const chartResult = await chartResponse.json();
+                const kwhResult = await kwhResponse.json();
+                const endTimeRequest = new Date();
+                const elapsedTime = endTimeRequest - new Date(startTime);
+
+                if (chartResponse.ok && kwhResponse.ok) {
+                    const kwh = kwhResult.kilo_watt_hours;
+                    const co2e = kwh * TAIPOWER_CO2E_FACTOR;
+                    
+                    renderChartData(chartResult.data);
+                    
+                    responseDisplay.innerHTML = `<strong>${tableName}</strong><br><strong>自訂區間</strong> 共使用 ${kwh.toFixed(2)} 度`;
+                    co2eDisplay.innerHTML = `產生 <span style="color: red;font-size: 40px;">${co2e.toFixed(2)}</span> 公斤碳排`;
+                    queryTimeDisplay.innerHTML = `查詢完成，耗時 ${elapsedTime} 毫秒`;
+                    console.log('自訂區間圖表數據查詢成功:', chartResult);
+                    console.log('自訂區間總用電量查詢成功:', kwhResult);
+                } else {
+                    responseDisplay.innerHTML = `<strong class="text-red-500">錯誤：</strong> ${chartResult.detail || kwhResult.detail || '未知的錯誤'}`;
+                    co2eDisplay.innerHTML = '';
+                    queryTimeDisplay.innerHTML = `查詢失敗，耗時 ${elapsedTime} 毫秒`;
+                    console.error('API 錯誤:', chartResult, kwhResult);
+                }
+            } catch (error) {
+                const endTimeRequest = new Date();
+                const elapsedTime = endTimeRequest - new Date(startTime);
+                responseDisplay.innerHTML = `<strong class="text-red-500">連線失敗或錯誤：</strong> ${error.message}`;
+                co2eDisplay.innerHTML = '';
+                queryTimeDisplay.innerHTML = `查詢失敗，耗時 ${elapsedTime} 毫秒`;
+                console.error('連線錯誤:', error);
+            }
+        }
+
+        async function exportToExcel(buttonElement) {
+            setActiveButton(buttonElement);
+            const startTime = document.getElementById('exportStartTime').value;
+            const endTime = document.getElementById('exportEndTime').value;
+            const tableName = document.getElementById('tableName').value;
+            const responseDisplay = document.getElementById('response-display');
+            const co2eDisplay = document.getElementById('co2e-display');
+            const queryTimeDisplay = document.getElementById('query-time-display');
+
+            if (!startTime || !endTime) {
+                responseDisplay.innerHTML = '<strong class="text-red-500">錯誤：請選擇起始和結束時間。</strong>';
+                co2eDisplay.innerHTML = '';
+                return;
+            }
+
+            const startDate = new Date(startTime);
+            const endDate = new Date(endTime);
+            const timeDifference = endDate.getTime() - startDate.getTime();
+
+            if (timeDifference > MAX_EXPORT_DAYS * MILLISECONDS_PER_HOUR * 24) {
+                responseDisplay.innerHTML = `<strong class="text-red-500">錯誤：資料匯出時間區間不能超過 ${MAX_EXPORT_DAYS} 天。</strong>`;
+                co2eDisplay.innerHTML = '';
+                return;
+            }
+
+            responseDisplay.innerHTML = `<strong>正在查詢並匯出 ${tableName} 的資料...</strong>`;
+            co2eDisplay.innerHTML = '';
+            queryTimeDisplay.innerHTML = '';
+
+            const startISO = startDate.toISOString();
+            const endISO = endDate.toISOString();
+            const url = `${CLOUD_RUN_URL}/api/get_chart_data?table_name=${tableName}&start_iso=${startISO}&end_iso=${endISO}`;
+
+            try {
+                const response = await fetch(url);
+                const result = await response.json();
+                const endTimeRequest = new Date();
+                const elapsedTime = endTimeRequest - new Date(startTime);
+
+                if (response.ok) {
+                    const data = result.data;
+                    if (data.length === 0) {
+                        responseDisplay.innerHTML = '<strong>沒有找到符合條件的資料。</strong>';
+                        queryTimeDisplay.innerHTML = `查詢完成，耗時 ${elapsedTime} 毫秒`;
+                        return;
+                    }
+                    
+                    const headers = ["timestamp", "watt", "total_watt_hours", "pf"];
+                    let csv = '\ufeff' + headers.join(',') + '\n';
+                    data.forEach(row => {
+                        const rowData = headers.map(header => row[header]);
+                        csv += rowData.join(',') + '\n';
+                    });
+
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', `${tableName}_${startTime}_to_${endTime}.csv`);
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    responseDisplay.innerHTML = `<strong>${tableName}</strong> 的資料已成功匯出。`;
+                    queryTimeDisplay.innerHTML = `匯出完成，耗時 ${elapsedTime} 毫秒`;
+                } else {
+                    responseDisplay.innerHTML = `<strong class="text-red-500">錯誤：</strong> ${result.detail || '未知的錯誤'}`;
+                    queryTimeDisplay.innerHTML = `匯出失敗，耗時 ${elapsedTime} 毫秒`;
+                    console.error('API 錯誤:', result);
+                }
+            } catch (error) {
+                const endTimeRequest = new Date();
+                const elapsedTime = endTimeRequest - new Date(startTime);
+                responseDisplay.innerHTML = `<strong class="text-red-500">連線失敗或錯誤：</strong> ${error.message}`;
+                queryTimeDisplay.innerHTML = `匯出失敗，耗時 ${elapsedTime} 毫秒`;
+                console.error('連線錯誤:', error);
+            }
+        }
+
+        
+        window.onload = function () {
+            initCharts();
+        };
+    </script>
+</body>
+</html>
