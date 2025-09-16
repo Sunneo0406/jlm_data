@@ -664,27 +664,27 @@ async def get_chart_data(table_name: str, start_iso: str, end_iso: str, user_id:
 def get_shift_watt_hours(shift_type: str, table_name: str,user_id: int = Depends(get_current_user)):
     if table_name not in VALID_TABLES:
         raise HTTPException(status_code=400, detail=f"Invalid table name: {table_name}")
+    
     taiwan_tz = pytz.timezone('Asia/Taipei')    
-    now = datetime.now(taiwan_tz)    #使用台灣時間
+    now = datetime.now(taiwan_tz)    # 使用台灣時間
+
+    start_time_obj = None
+    end_time_obj = None
+
     if shift_type == "day_shift":
-        temp1_time = now.replace(hour=8, minute=0, second=0, microsecond=0) - timedelta(days=1)
-        start_time = temp1_time.strftime('%Y-%m-%d %H:%M:%S')
-        temp2_time = now.replace(hour=17, minute=0, second=0, microsecond=0) - timedelta(days=1)
-        end_time = temp2_time.strftime('%Y-%m-%d %H:%M:%S')
+        start_time_obj = (now.replace(hour=8, minute=0, second=0, microsecond=0) - timedelta(days=1))
+        end_time_obj = (now.replace(hour=17, minute=0, second=0, microsecond=0) - timedelta(days=1))
     elif shift_type == "night_shift":
-        temp1_time = now.replace(hour=19, minute=0, second=0, microsecond=0) - timedelta(days=1)
-        start_time = temp1_time.strftime('%Y-%m-%d %H:%M:%S')
-        temp2_time = now.replace(hour=5, minute=0, second=0, microsecond=0)
-        end_time = temp2_time.strftime('%Y-%m-%d %H:%M:%S')
+        start_time_obj = (now.replace(hour=19, minute=0, second=0, microsecond=0) - timedelta(days=1))
+        end_time_obj = now.replace(hour=5, minute=0, second=0, microsecond=0)
     elif shift_type == "since_morning":
-        temp1_time = now.replace(hour=8, minute=0, second=0, microsecond=0)
-        start_time = temp1_time.strftime('%Y-%m-%d %H:%M:%S')
-        temp2_time = now.replace(microsecond=0)#將毫秒去掉
-        end_time = temp2_time.strftime('%Y-%m-%d %H:%M:%S') #將時區08:00去掉
+        start_time_obj = now.replace(hour=8, minute=0, second=0, microsecond=0)
+        end_time_obj = now.replace(microsecond=0) # 將毫秒去掉
     else:
         raise HTTPException(status_code=400, detail="Invalid shift type")
     
-    kwh = get_total_watt_hours_difference(start_time, end_time, table_name)
+    # 直接傳遞 datetime 物件，而不是字串
+    kwh = get_total_watt_hours_difference(start_time_obj, end_time_obj, table_name)
     
     if kwh is None:
         raise HTTPException(status_code=404, detail="找不到指定時間範圍內的資料")
