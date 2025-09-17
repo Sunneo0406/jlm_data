@@ -468,7 +468,7 @@ def get_tables(user_id: int = Depends(get_current_user)):
 @app.get("/api/get_total_daily_kwh")
 def get_total_daily_kwh(user_id: int = Depends(get_current_user)):
     """
-    計算從今天早上 08:00:00 到現在所有合法資料表總用電量的總和。
+    計算從今天凌晨 00:00:00 到現在所有合法資料表總用電量的總和。
     此函數會查詢每個資料表在 08:00:00 後的第一筆數據，並與最新一筆數據做差值計算，
     最後將所有差值加總，以顯示當日的總耗電量。
     """
@@ -482,21 +482,21 @@ def get_total_daily_kwh(user_id: int = Depends(get_current_user)):
         taipei_tz = pytz.timezone('Asia/Taipei')
         now_taipei = datetime.now(taipei_tz)
         
-        # 設定台灣時間的早上 8:00
-        start_time_today_taipei = now_taipei.replace(hour=8, minute=0, second=0, microsecond=0)
+        # 設定台灣時間的早上 00:00
+        start_time_today_taipei = now_taipei.replace(hour=0, minute=0, second=0, microsecond=0)
         
-        # 確保當前台灣時間在早上 8:00 之後才進行計算
+        # 確保當前台灣時間在早上 00:00 之後才進行計算
         if now_taipei < start_time_today_taipei:
             return {"total_kwh": 0}
             
-        # 將台灣時間的 8:00 轉換為 UTC，並移除時區資訊，以匹配資料庫的時間戳記
+        # 將台灣時間的 00:00 轉換為 UTC，並移除時區資訊，以匹配資料庫的時間戳記
         start_time_str = start_time_today_taipei.strftime('%Y-%m-%d %H:%M:%S')
             
         conn = get_db_connection_from_pool()
         cursor = conn.cursor(dictionary=True)
         
         for table_name in VALID_TABLES:
-            # 查詢 08:00:00 後的第一筆數據 (當日開工數據)
+            # 查詢 00:00:00 後的第一筆數據 (當日開工數據)
             query_start = f"SELECT total_watt_hours FROM `{table_name}` WHERE timestamp >= %s ORDER BY timestamp ASC LIMIT 1"
             cursor.execute(query_start, (start_time_str,))
             result_start = cursor.fetchone()
