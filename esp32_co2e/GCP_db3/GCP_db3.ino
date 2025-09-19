@@ -1,6 +1,6 @@
 /*
- 120型用
- http://esp32B.local 更新網頁
+ 破碎機(220V), 冰水機, 雕刻機, 空壓機用
+ http://esp32C.local 更新網頁
  
  程式功能:
  1. 喚醒後立即讀取 Modbus 設備資料並上傳到 Google Cloud。
@@ -37,43 +37,23 @@ const int httpsPort = 443;
 const char* ssid ="hinet-15_Plus";
 const char* password = "034967658";
 
+String device[4] = {"破碎機(220V)", "冰水機", "雕刻機", "空壓機"};
 
-// PA330 Input Registers
-#define Vln_a 0x1000
-#define Vln_b 0x1002
-#define Vln_c 0x1004
-#define Vln_avg 0x1006
-#define Vll_ab 0x1008
-#define Vll_bc 0x100A
-#define Vll_ca 0x100C
-#define Vll_avg 0x100E
-#define I_a 0x1010
-#define I_b 0x1012
-#define I_c 0x1014
-#define I_avg 0x1016
-#define Frequency 0x1018
+// KWS-AC301 Input 暫存器定義
+#define Vll_avg 0x0E
+#define I_avg 0x0F      //0x0F, 0x10
+#define PF 0x1D
+#define Frequency 0x1E
+#define kVA_tot 0x11    //0x11, 0x12
+#define kVAh 0x17       //0x17, 0x18
 
-#define kW_a 0x101A
-#define kW_b 0x101C
-#define kW_c 0x101E
-#define kW_tot 0x1020
-#define kvar_a 0x1022
-#define kvar_b 0x1024
-#define kvar_c 0x1026
-#define kvar_tot 0x1028
-#define kVA_a 0x102A
-#define kVA_b 0x102C
-#define kVA_c 0x102E
-#define kVA_tot 0x1030
-#define PF 0x1032
-
-#define kWh 0x1034
-#define kvarh 0x1036
-#define kVAh 0x1038
-
+// Connected Pin
 #define RX 16
 #define TX 17
-#define Modbus_ID1 15
+#define Modbus_ID 2
+#define s0 25
+#define s1 26
+#define s2 27
 
 //--------------------- 全域變數與物件 ---------------------
 volatile bool my_flag = 0;
@@ -81,10 +61,9 @@ volatile uint8_t status = 0;
 WebServer server(80);
 ModbusMaster node;
 
-/*
- * Login page
- */
 
+
+//--------------------- 網頁介面 HTML ---------------------
 const char* loginIndex =
  "<form name='loginForm'>"
     "<table width='20%' bgcolor='A09F9F' align='center'>"
@@ -169,34 +148,66 @@ const char* serverIndex =
  "</script>";
 
 
+// Function to generate random float values between min and max
+float generateRandomData(float min, float max) {
+  return min + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (max - min)));
+}
+
+void readMux(int channel){
+  int controlPin[] = {s0, s1, s2};
+
+  int muxChannel[8][3]={
+    {0,0,0}, //channel 1
+    {0,0,1}, //channel 2
+    {0,1,0}, //channel 3
+    {0,1,1}, //channel 4
+    {1,0,0}, //channel 5
+    {1,0,1}, //channel 6
+    {1,1,0}, //channel 7
+    {1,1,1}  //channel 8
+  };
+  //loop through the 3 sig
+  for(int i=0; i<3; i++){
+    digitalWrite(controlPin[2-i], muxChannel[channel][2-i]);
+  }
+}
+
+
 /////////////////////////////// PA330 Data //////////////////////////////////////////////
-//--------------------- 輔助函式 ---------------------
-float RS485_data(uint16_t Reg) {
+float RS485_data(uint16_t Reg, int size, float ratio)
+{
   uint8_t result;
-  int retries = 3; // 設定重試次數為 3 次
+  // Combine the two 16-bit registers into a 32-bit int register
+  int retries = 3;
   union {
-    uint16_t raw_data[2];
-    float floatValue;
+    uint16_t raw_data[2] = {0x0000, 0x0000};
+    uint32_t value;
   } Data;
-  
+
   float final_Data = 9999.99;
 
-  while (retries > 0) {
-    result = node.readInputRegisters(Reg, 2);
-    if (result == node.ku8MBSuccess) {
-      Data.raw_data[0] = node.getResponseBuffer(0);
-      Data.raw_data[1] = node.getResponseBuffer(1);
-      final_Data = Data.floatValue;
-      return final_Data; // 成功讀取，直接回傳正確的值
-    }
-    retries--; // 失敗則重試次數減 1
-    delay(100); // 每次重試之間稍作延遲
-  }
+  // Read Voltage L-N for Phase A (Register 0x1000 - 0x1001)
+  while (retries > 0){
+    result = node.readHoldingRegisters(Reg, size);
 
-  // 如果重試 3 次都失敗，才印出錯誤訊息
+    if (result == node.ku8MBSuccess) {
+      for(int i=0; i<size; i++)
+      {
+      Data.raw_data[i] = node.getResponseBuffer(i);
+      }
+      final_Data = Data.value / ratio;
+      return final_Data;
+    } 
+    retries--;
+    delay(100);
+  }
+  // else {
+  //   Serial.print("Failed to read data. Error: ");
+  //   Serial.println(result);
+  // }
   Serial.print("Failed to read data after 3 retries. Error: ");
   Serial.println(result);
-  return final_Data; // 回傳失敗的預設值
+  return final_Data;
 }
 /////////////////////////////////////////////////////////////////////////////////////////
 
@@ -251,53 +262,93 @@ void setFlag() {
 }
 
 void reset() {
-  if (my_flag == 1) {
-    uint16_t resetAddress = 0x1201;
-    uint16_t resetValue = 0x5AA5;
-    node.begin(Modbus_ID1, Serial2);
-    node.setTransmitBuffer(0, resetValue);
-    uint8_t result1 = node.writeMultipleRegisters(resetAddress, 1);
-    delay(10);
 
-    if (result1 == node.ku8MBSuccess)
-      status = 1;
-    else
-      status = result1;
+  bool shouldReset = false;
+  // portENTER_CRITICAL(&flagMutex);
+  if(my_flag == 1) {
+    shouldReset = true;
+  }
+  // portEXIT_CRITICAL(&flagMutex);
+
+  if(shouldReset)
+  {
+    // Start Modbus RTU transaction
+    uint16_t startAddress = 0x154;
+    uint8_t numberOfRegisters = 5; // From 0x154 to 0x158
+
+    uint16_t values[numberOfRegisters] = {0, 0, 0, 0, 0}; // Array of zeros
+
+    for(int i=0; i<4; i++)
+    {
+      readMux(i);
+      // Write 0 to registers from 0x154 to 0x158
+      for (uint8_t j = 0; j < numberOfRegisters; j++) {
+        node.setTransmitBuffer(j, 0);  // Set register value at index i
+      }
+
+      // Write multiple registers
+      uint8_t result = node.writeMultipleRegisters(startAddress, numberOfRegisters);
+    }
+
+    // // Clear flag in critical section
+    // portENTER_CRITICAL(&flagMutex);
     my_flag = 0;
+    // portEXIT_CRITICAL(&flagMutex);
   }
 }
 
-void send_data(){
-    node.begin(Modbus_ID1, Serial2);
-    // 1. 先讀取一個關鍵指標，例如電壓
-    float voltage1 = RS485_data(Vll_avg);
-    float current1 = RS485_data(I_avg);
-    // 2. 關鍵檢查點：判斷讀取是否失敗
-    // 如果 voltage1 是 9999.99，代表電表離線或通訊失敗
-    if (voltage1 == 9999.99) {
-        Serial.println("讀取電表失敗 (可能已關機)，中止本次資料上傳。");
-        return; // 直接結束此函式，不執行後續的上傳動作
-    }
-    //如果current1是0代表機台關機
-    if (current1 <= 1){
-      Serial.println("機台關機、電表未關機，中止資料上傳節省資料庫傳輸費用。");
-      return;
-    }
-    float freq1 = RS485_data(Frequency);
-    float pf1 = RS485_data(PF);
-    float watt1 = RS485_data(kVA_tot);
-    float total_w1 = RS485_data(kVAh);
-    String tableName1 = "120型";
-    sendToGCP(voltage1, current1, freq1, pf1, watt1, total_w1, tableName1);
-    Serial.println("資料上傳完畢!");
+// Function for the task running on Core 0
+void TaskCore0(void *pvParameters) {
+  for (;;) {
+    // Your code for Core 0
+    server.handleClient();
+    vTaskDelay(10 / portTICK_PERIOD_MS); // Delay for 10 milliseconds
+  }
 }
 
-// Function for the task running on Core 0
+void send_data() {
+  node.begin(Modbus_ID, Serial2);
+  for(int i=0; i<4; i++)
+  {
+    readMux(i);
+    float voltage = RS485_data(Vll_avg, 1, 10.0);
+    float current = RS485_data(I_avg, 2, 1000.0);
+    //若voltage為9999.99代表電表關機或故障
+    if (voltage == 9999.99) {
+        Serial.printf("設備 %s (通道 %d) 讀取失敗，跳過本次上傳。\n", device[i].c_str(), i);
+        continue; // <-- 請務必將 return 修改為 continue
+    }
+
+    //若current為1代表機台關機電表未關機
+    if (current <= 1){
+      Serial.printf("設備%s關機(通道 %d)，跳過本次上傳節省資料傳輸費用。\n",device[i].c_str(),i);
+      continue;
+    }
+    
+    float freq = RS485_data(Frequency, 1, 10.0);
+    float pf = RS485_data(PF, 1, 100.0);
+    float watt = RS485_data(kVA_tot, 2, 10000.0);
+    float total_w = RS485_data(kVAh, 2, 1000.0);
+    String tableName = device[i];
+    
+    sendToGCP(voltage, current, freq, pf, watt, total_w, tableName);
+  }
+}
 
 void setup() {
+
+  pinMode(s0, OUTPUT); 
+  pinMode(s1, OUTPUT); 
+  pinMode(s2, OUTPUT); 
+
+  digitalWrite(s0, LOW);
+  digitalWrite(s1, LOW);
+  digitalWrite(s2, LOW);
+
   // Start serial communication
   Serial.begin(115200);
-  Serial2.begin(19200, SERIAL_8N1, 16, 17);
+  Serial2.begin(9600, SERIAL_8N1, 16, 17); // ESP32 RX=16, TX=17, Baud Rate=9600
+  node.begin(Modbus_ID, Serial2);
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -307,7 +358,7 @@ void setup() {
   Serial.println("已連線到 WiFi");
   Serial.println(WiFi.localIP());
 
-  while (!MDNS.begin("esp32B")) { 
+  while (!MDNS.begin("esp32C")) { 
     Serial.println("mDNS 啟動失敗!");
     delay(1000);
   }
@@ -318,6 +369,7 @@ void setup() {
   server.on("/wifi", wifi_signal);
   server.on("/reset", setFlag);
   server.begin();
+  xTaskCreatePinnedToCore(TaskCore0, "TaskCore0", 10000, NULL, 1, NULL, 0);
   
   Serial.println("ESP32 喚醒！");
 
@@ -327,7 +379,6 @@ void setup() {
   unsigned long startMillis = millis();
   Serial.println("等待 OTA 連線中... (5分鐘)");
   while (millis() - startMillis < OTA_TIMEOUT_MS) {
-    server.handleClient();
     reset(); 
     delay(10);
   }
@@ -338,8 +389,9 @@ void setup() {
 
   Serial.println("即將進入深度睡眠...");
   esp_deep_sleep(DEEP_SLEEP_SEC * 1000000);
+
 }
 
 void loop() {
- 
+
 }
