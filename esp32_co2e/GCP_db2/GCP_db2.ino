@@ -262,15 +262,18 @@ void send_data(){
     node.begin(Modbus_ID1, Serial2);
     // 1. 先讀取一個關鍵指標，例如電壓
     float voltage1 = RS485_data(Vll_avg);
-
+    float current1 = RS485_data(I_avg);
     // 2. 關鍵檢查點：判斷讀取是否失敗
     // 如果 voltage1 是 9999.99，代表電表離線或通訊失敗
     if (voltage1 == 9999.99) {
         Serial.println("讀取電表失敗 (可能已關機)，中止本次資料上傳。");
         return; // 直接結束此函式，不執行後續的上傳動作
     }
-    
-    float current1 = RS485_data(I_avg);
+    //如果current1是0代表機台關機
+    if (current1 <= 1){
+      Serial.println("機台關機、電表未關機，中止資料上傳節省資料庫傳輸費用。");
+      return;
+    }
     float freq1 = RS485_data(Frequency);
     float pf1 = RS485_data(PF);
     float watt1 = RS485_data(kVA_tot);

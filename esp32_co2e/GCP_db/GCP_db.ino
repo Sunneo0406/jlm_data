@@ -245,12 +245,17 @@ void reset() {
 void send_data() {
   node.begin(Modbus_ID1, Serial2);
   float voltage1 = RS485_data(Vll_avg);
+   float current1 = RS485_data(I_avg);
   // 如果 voltage1 是 9999.99，代表電表離線或通訊失敗
     if (voltage1 == 9999.99) {
         Serial.println("讀取電表失敗 (可能已關機)，中止本次資料上傳。");
         return; // 直接結束此函式，不執行後續的上傳動作
     }
-  float current1 = RS485_data(I_avg);
+    //如果current1是<1表示機台沒有在運作
+    if (current1 <= 1){
+      Serial.println("機台關機、電表未關機，中止資料上傳節省資料庫傳輸費用。");
+      return;
+    }
   float freq1 = RS485_data(Frequency);
   float pf1 = RS485_data(PF);
   float watt1 = RS485_data(kVA_tot);
@@ -261,12 +266,17 @@ void send_data() {
 #if (esp32device==1)
   node.begin(Modbus_ID2, Serial2);
   float voltage2 = RS485_data(Vll_avg);
-  // 如果 voltage1 是 9999.99，代表電表離線或通訊失敗
+  float current2 = RS485_data(I_avg);
+  // 如果 voltage2 是 9999.99，代表電表離線或通訊失敗
     if (voltage2 == 9999.99) {
         Serial.println("讀取電表失敗 (可能已關機)，中止本次資料上傳。");
         return; // 直接結束此函式，不執行後續的上傳動作
     }
-  float current2 = RS485_data(I_avg);
+  //如果current2是<1代表機台關機
+     if (current2 <= 1){
+      Serial.println("機台關機、電表未關機，中止資料上傳節省資料庫傳輸費用。");
+      return;
+    }
   float freq2 = RS485_data(Frequency);
   float pf2 = RS485_data(PF);
   float watt2 = RS485_data(kVA_tot);
